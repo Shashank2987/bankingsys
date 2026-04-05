@@ -6,7 +6,19 @@
 
 using namespace std;
 
+// 🔥 ensure transactions file exists
+void ensure_transactions_file() {
+    ifstream file("transactions.csv");
+
+    if (!file.is_open()) {
+        ofstream newfile("transactions.csv");
+        newfile << "from_acc,to_acc,amount,type,timestamp\n";
+        newfile.close();
+    }
+}
+
 BankSystem::BankSystem() {
+    ensure_transactions_file();  // auto-create file
     load();
 }
 
@@ -31,13 +43,22 @@ void BankSystem::create_account() {
     string name, pass;
     double bal;
 
-    cout << "enter account no: ";
+    cout << "enter account no: " << endl;
     cin >> acc;
-    cout << "name: ";
+
+    // check duplicate
+    if (find_account(acc)) {
+        cout << "account already exists\n";
+        return;
+    }
+
+    cout << "name: " << endl;
     cin >> name;
-    cout << "password: ";
-    cin >> pass;
-    cout << "initial balance: ";
+
+    cout << "password: " << endl;
+    getline(cin>>ws,pass);
+
+    cout << "initial balance: " << endl;
     cin >> bal;
 
     accounts.push_back(Account(acc, name, pass, bal));
@@ -50,9 +71,10 @@ Account* BankSystem::login() {
     int acc;
     string pass;
 
-    cout << "account no: ";
+    cout << "account no: " << endl;
     cin >> acc;
-    cout << "password: ";
+
+    cout << "password: " << endl;
     cin >> pass;
 
     Account* user = find_account(acc);
@@ -72,7 +94,8 @@ void BankSystem::check_balance(Account* user) {
 
 void BankSystem::add_money(Account* user) {
     double amt;
-    cout << "enter amount: ";
+
+    cout << "enter amount: " << endl;
     cin >> amt;
 
     if (amt <= 0) {
@@ -90,10 +113,10 @@ void BankSystem::send_money(Account* user) {
     int to_acc;
     double amt;
 
-    cout << "enter receiver account no: ";
+    cout << "enter receiver account no: " << endl;
     cin >> to_acc;
 
-    cout << "enter amount: ";
+    cout << "enter amount: " << endl;
     cin >> amt;
 
     if (amt <= 0) {
@@ -116,6 +139,7 @@ void BankSystem::send_money(Account* user) {
     receiver->deposit(amt);
     save();
 
+    // log transaction
     ofstream file("transactions.csv", ios::app);
     time_t now = time(0);
 
@@ -133,13 +157,32 @@ void BankSystem::user_menu(Account* user) {
     int choice;
 
     do {
-        cout << "\n1. check balance\n2. add money\n3. send money\n4. exit\n";
+        cout << "\n1. check balance\n";
+        cout << "2. add money\n";
+        cout << "3. send money\n";
+        cout << "4. exit\n";
+
         cin >> choice;
 
         switch (choice) {
-            case 1: check_balance(user); break;
-            case 2: add_money(user); break;
-            case 3: send_money(user); break;
+            case 1:
+                check_balance(user);
+                break;
+
+            case 2:
+                add_money(user);
+                break;
+
+            case 3:
+                send_money(user);
+                break;
+
+            case 4:
+                cout << "logging out...\n";
+                break;
+
+            default:
+                cout << "invalid choice\n";
         }
 
     } while (choice != 4);

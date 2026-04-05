@@ -1,5 +1,4 @@
 #include "filehandler.h"
-#include <iostream>
 #include <fstream>
 #include <sstream>
 #include <vector>
@@ -9,16 +8,19 @@ using namespace std;
 
 vector<Account> load_accounts() {
     vector<Account> accounts;
+
     ifstream file("accounts.csv");
 
-    string line;
-
+    // auto-create file if missing
     if (!file.is_open()) {
-        cout << "file not found\n";
+        ofstream newfile("accounts.csv");
+        newfile << "account_no,name,password,balance\n";
+        newfile.close();
         return accounts;
     }
 
-    getline(file, line); // skip header
+    string line;
+    getline(file, line);
 
     while (getline(file, line)) {
         stringstream ss(line);
@@ -31,11 +33,12 @@ vector<Account> load_accounts() {
 
         if (acc.empty()) continue;
 
-        int acc_no = stoi(acc);
-        double balance = stod(bal);
-
-        Account temp(acc_no, name, pass, balance);
-        accounts.push_back(temp);
+        accounts.push_back(Account(
+            stoi(acc),
+            name,
+            pass,
+            stod(bal)
+        ));
     }
 
     file.close();
@@ -47,11 +50,11 @@ void save_accounts(vector<Account> &accounts) {
 
     file << "account_no,name,password,balance\n";
 
-    for (size_t i = 0; i < accounts.size(); i++) {
-        file << accounts[i].get_account_no() << ","
-             << accounts[i].get_name() << ","
-             << accounts[i].get_password() << ","
-             << accounts[i].get_balance() << "\n";
+    for (auto &acc : accounts) {
+        file << acc.get_account_no() << ","
+             << acc.get_name() << ","
+             << acc.get_password() << ","
+             << acc.get_balance() << "\n";
     }
 
     file.close();
