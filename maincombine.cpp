@@ -51,7 +51,7 @@ vector<Account> load_accounts() {
     }
 
     string line;
-    getline(file, line);
+    getline(file, line); // To Skip First Line
 
     while (getline(file, line)) {
         stringstream ss(line);
