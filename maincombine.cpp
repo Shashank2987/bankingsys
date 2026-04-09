@@ -192,6 +192,9 @@ void show_transaction_history(Account* user) {
     bool found = false;
 
     while (getline(file, line)) {
+
+        if (line.empty()) continue; // 🔥 skip empty lines
+
         stringstream ss(line);
 
         string sender, receiver, amount, type, timestamp;
@@ -202,21 +205,33 @@ void show_transaction_history(Account* user) {
         getline(ss, type, ',');
         getline(ss, timestamp);
 
-        int acc_no = user->get_account_no();
+        // 🔥 skip header or invalid rows
+        if (sender == "sender" || receiver.empty()) continue;
 
-        if (stoi(sender) == acc_no || stoi(receiver) == acc_no) {
-            found = true;
+        try {
+            int s = stoi(sender);
+            int r = stoi(receiver);
+            int acc_no = user->get_account_no();
 
-            printLine();
+            if (s == acc_no || r == acc_no) {
+                found = true;
 
-            if (stoi(sender) == acc_no) {
-                cout << "[DEBIT]   Sent $" << amount << " to Acc " << receiver << "\n";
-            } else {
-                cout << "[CREDIT]  Received $" << amount << " from Acc " << sender << "\n";
+                printLine();
+
+                if (s == acc_no) {
+                    cout << "[DEBIT]   Sent $" << amount << " to Acc " << receiver << "\n";
+                } else {
+                    cout << "[CREDIT]  Received $" << amount << " from Acc " << sender << "\n";
+                }
+
+                // 🔥 safe timestamp conversion
+                time_t t = stol(timestamp);
+                cout << "[DATE]    " << ctime(&t);
             }
-
-            time_t t = stol(timestamp);
-            cout << "[DATE]    " << ctime(&t);
+        }
+        catch (...) {
+            // 🔥 ignore bad rows instead of crashing
+            continue;
         }
     }
 
