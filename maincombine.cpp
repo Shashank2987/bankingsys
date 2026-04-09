@@ -3,8 +3,8 @@
 #include <sstream>
 #include <vector>
 #include <string>
-#include <ctime>   // Standard C-time
-#include <iomanip> // For formatting numbers
+#include <ctime>
+#include <iomanip>
 
 using namespace std;
 
@@ -68,6 +68,7 @@ public:
 vector<Account> load_accounts() {
     vector<Account> accounts;
     ifstream file("accounts.csv");
+
     if (!file.is_open()) {
         ofstream newfile("accounts.csv");
         newfile << "account_no,name,password,balance\n";
@@ -76,91 +77,175 @@ vector<Account> load_accounts() {
     }
 
     string line;
-    getline(file, line); 
+    getline(file, line);
+
     while (getline(file, line)) {
         stringstream ss(line);
         string acc, name, pass, bal;
+
         getline(ss, acc, ',');
         getline(ss, name, ',');
         getline(ss, pass, ',');
         getline(ss, bal, ',');
-        if (!acc.empty()) accounts.push_back(Account(stoi(acc), name, pass, stod(bal)));
+
+        if (!acc.empty())
+            accounts.push_back(Account(stoi(acc), name, pass, stod(bal)));
     }
+
     file.close();
     return accounts;
 }
 
 void save_accounts(vector<Account> &accounts) {
     ofstream file("accounts.csv");
+
     file << "account_no,name,password,balance\n";
+
     for (auto &acc : accounts) {
         file << acc.get_account_no() << ","
              << acc.get_name() << ","
              << acc.get_password() << ","
              << fixed << setprecision(2) << acc.get_balance() << "\n";
     }
+
     file.close();
 }
 
 // ---------------- SYSTEM FUNCTIONS ----------------
 Account* find_account(vector<Account> &accounts, int acc_no) {
     for (auto &acc : accounts) {
-        if (acc.get_account_no() == acc_no) return &acc;
+        if (acc.get_account_no() == acc_no)
+            return &acc;
     }
     return nullptr;
 }
 
 void create_account(vector<Account> &accounts) {
     printHeader("OPEN NEW ACCOUNT");
+
     int acc;
     string name, pass;
     double bal;
 
-    cout << "Enter Account No  : "; cin >> acc;
+    cout << "Enter Account No  : ";
+    cin >> acc;
+
     if (find_account(accounts, acc)) {
-        cout << "\n[!] Error: Account already exists.\n";
+        cout << "\n[!] Account already exists.\n";
         pause();
         return;
     }
-    cout << "Enter Name        : "; cin.ignore(); getline(cin, name);
-    cout << "Enter Password    : "; cin >> pass;
-    cout << "Initial Deposit $ : "; cin >> bal;
+
+    cout << "Enter Name        : ";
+    cin.ignore();
+    getline(cin, name);
+
+    cout << "Enter Password    : ";
+    cin >> pass;
+
+    cout << "Initial Deposit $ : ";
+    cin >> bal;
 
     accounts.push_back(Account(acc, name, pass, bal));
     save_accounts(accounts);
-    cout << "\n[SUCCESS] Account created successfully!\n";
+
+    cout << "\n[SUCCESS] Account created.\n";
     pause();
 }
 
 Account* login(vector<Account> &accounts) {
-    printHeader("MEMBER LOGIN");
+    printHeader("LOGIN");
+
     int acc;
     string pass;
 
-    cout << "Account No: "; cin >> acc;
-    cout << "Password  : "; cin >> pass;
+    cout << "Account No: ";
+    cin >> acc;
+
+    cout << "Password  : ";
+    cin >> pass;
 
     Account* user = find_account(accounts, acc);
+
     if (user && user->get_password() == pass) {
         return user;
     }
-    cout << "\n[!] Invalid credentials.\n";
+
+    cout << "\n[!] Invalid login.\n";
     pause();
     return nullptr;
 }
 
+// ---------------- TRANSACTION HISTORY ----------------
+void show_transaction_history(Account* user) {
+    printHeader("TRANSACTION HISTORY");
+
+    ifstream file("transactions.csv");
+
+    if (!file.is_open()) {
+        cout << "[!] No transaction file found.\n";
+        pause();
+        return;
+    }
+
+    string line;
+    bool found = false;
+
+    while (getline(file, line)) {
+        stringstream ss(line);
+
+        string sender, receiver, amount, type, timestamp;
+
+        getline(ss, sender, ',');
+        getline(ss, receiver, ',');
+        getline(ss, amount, ',');
+        getline(ss, type, ',');
+        getline(ss, timestamp);
+
+        int acc_no = user->get_account_no();
+
+        if (stoi(sender) == acc_no || stoi(receiver) == acc_no) {
+            found = true;
+
+            printLine();
+
+            if (stoi(sender) == acc_no) {
+                cout << "[DEBIT]   Sent $" << amount << " to Acc " << receiver << "\n";
+            } else {
+                cout << "[CREDIT]  Received $" << amount << " from Acc " << sender << "\n";
+            }
+
+            time_t t = stol(timestamp);
+            cout << "[DATE]    " << ctime(&t);
+        }
+    }
+
+    if (!found) {
+        cout << "\nNo transactions found.\n";
+    }
+
+    file.close();
+    pause();
+}
+
+// ---------------- MONEY TRANSFER ----------------
 void send_money(Account* user, vector<Account> &accounts) {
     printHeader("TRANSFER FUNDS");
+
     int to_acc;
     double amt;
 
-    cout << "Target Account No : "; cin >> to_acc;
-    cout << "Transfer Amount $ : "; cin >> amt;
+    cout << "Target Account No : ";
+    cin >> to_acc;
+
+    cout << "Transfer Amount $ : ";
+    cin >> amt;
 
     if (amt <= 0) {
         cout << "\n[!] Invalid amount.\n";
     } else {
         Account* receiver = find_account(accounts, to_acc);
+
         if (!receiver) {
             cout << "\n[!] Receiver not found.\n";
         } else if (!user->withdraw(amt)) {
@@ -169,68 +254,94 @@ void send_money(Account* user, vector<Account> &accounts) {
             receiver->deposit(amt);
             save_accounts(accounts);
 
-            // Using ctime for timestamp
+            // Save transaction
             time_t now = time(0);
-            char* dt = ctime(&now);
 
             ofstream file("transactions.csv", ios::app);
-            file << user->get_account_no() << "," << receiver->get_account_no() << ","
-                 << amt << ",transfer," << dt; // dt includes newline
+            file << user->get_account_no() << ","
+                 << receiver->get_account_no() << ","
+                 << amt << ",transfer,"
+                 << now << "\n";
+
             file.close();
 
             cout << "\n[SUCCESS] Transfer complete!\n";
         }
     }
+
     pause();
 }
 
+// ---------------- USER MENU ----------------
 void user_menu(Account* user, vector<Account> &accounts) {
     int choice;
+
     do {
         string title = "WELCOME, " + user->get_name();
         printHeader(title);
+
         cout << "1. Check Balance\n";
         cout << "2. Deposit Money\n";
         cout << "3. Send Money\n";
-        cout << "4. Logout\n";
-        cout << "\nSelection: ";
+        cout << "4. Transaction History\n";
+        cout << "5. Logout\n";
+
+        cout << "\nChoice: ";
         cin >> choice;
 
         if (choice == 1) {
-            cout << "\nYour Balance: $" << fixed << setprecision(2) << user->get_balance() << endl;
+            cout << "\nBalance: $" << fixed << setprecision(2)
+                 << user->get_balance() << endl;
             pause();
-        } else if (choice == 2) {
+        }
+        else if (choice == 2) {
             double amt;
-            cout << "Amount to Deposit: "; cin >> amt;
+            cout << "Deposit Amount: ";
+            cin >> amt;
+
             if (amt > 0) {
                 user->deposit(amt);
                 save_accounts(accounts);
-                cout << "\n[SUCCESS] Deposit successful.\n";
-            } else cout << "\n[!] Invalid amount.\n";
+                cout << "\n[SUCCESS] Deposit done.\n";
+            } else {
+                cout << "\n[!] Invalid amount.\n";
+            }
+
             pause();
-        } else if (choice == 3) {
+        }
+        else if (choice == 3) {
             send_money(user, accounts);
         }
-    } while (choice != 4);
+        else if (choice == 4) {
+            show_transaction_history(user);
+        }
+
+    } while (choice != 5);
 }
 
+// ---------------- MAIN ----------------
 int main() {
     vector<Account> accounts = load_accounts();
     int choice;
 
     do {
-        printHeader("CRYPTO BANKING SYSTEM");
+        printHeader("SMART BANKING SYSTEM");
+
         cout << "1. Open Account\n";
         cout << "2. Login\n";
-        cout << "3. Exit System\n";
+        cout << "3. Exit\n";
+
         cout << "\nChoice: ";
         cin >> choice;
 
-        if (choice == 1) create_account(accounts);
+        if (choice == 1) {
+            create_account(accounts);
+        }
         else if (choice == 2) {
             Account* user = login(accounts);
             if (user) user_menu(user, accounts);
         }
+
     } while (choice != 3);
 
     return 0;
