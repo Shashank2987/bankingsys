@@ -118,7 +118,6 @@ Account* find_account(vector<Account> &accounts, int acc_no) {
     }
     return nullptr;
 }
-
 void create_account(vector<Account> &accounts) {
     printHeader("OPEN NEW ACCOUNT");
 
