@@ -110,7 +110,6 @@ void save_accounts(vector<Account> &accounts) {
 
     file.close();
 }
-
 // ---------------- SYSTEM FUNCTIONS ----------------
 Account* find_account(vector<Account> &accounts, int acc_no) {
     for (auto &acc : accounts) {
