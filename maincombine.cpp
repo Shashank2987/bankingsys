@@ -241,6 +241,49 @@ void show_transaction_history(Account* user) {
     pause();
 }
 
+//-----------------Fraud Detection-----------------
+int calculate_risk(Account* user, int receiver, double amount) {
+    int risk = 0;
+
+    double balance = user->get_balance();
+
+    // Rule 1: Large amount
+    if (amount > 10000)
+        risk += 40;
+
+    // Rule 2: Low remaining balance
+    if ((balance - amount) < 500)
+        risk += 20;
+
+    // Rule 3: Large percentage of balance
+    if (amount > 0.8 * balance)
+        risk += 20;
+
+    // Rule 4: New receiver (check in transaction history)
+    ifstream file("transactions.csv");
+    string line;
+    bool known = false;
+
+    while (getline(file, line)) {
+        stringstream ss(line);
+        string s, r;
+
+        getline(ss, s, ',');
+        getline(ss, r, ',');
+
+        if (!s.empty() && stoi(s) == user->get_account_no() && stoi(r) == receiver) {
+            known = true;
+            break;
+        }
+    }
+
+    if (!known)
+        risk += 20;
+
+    file.close();
+
+    return risk;
+}
 // ---------------- MONEY TRANSFER ----------------
 void send_money(Account* user, vector<Account> &accounts) {
     printHeader("TRANSFER FUNDS");
@@ -256,35 +299,63 @@ void send_money(Account* user, vector<Account> &accounts) {
 
     if (amt <= 0) {
         cout << "\n[!] Invalid amount.\n";
-    } else {
+    } 
+    else {
         Account* receiver = find_account(accounts, to_acc);
 
         if (!receiver) {
             cout << "\n[!] Receiver not found.\n";
-        } else if (!user->withdraw(amt)) {
-            cout << "\n[!] Insufficient balance.\n";
-        } else {
-            receiver->deposit(amt);
-            save_accounts(accounts);
+        } 
+        else {
+            // 🔥 FRAUD DETECTION (BEFORE ANY MONEY CHANGE)
+            int risk = calculate_risk(user, to_acc, amt);
 
-            // Save transaction
-            time_t now = time(0);
+            cout << "\n[Risk Analysis]\n";
+            cout << "Risk Score: " << risk << "%\n";
 
-            ofstream file("transactions.csv", ios::app);
-            file << user->get_account_no() << ","
-                 << receiver->get_account_no() << ","
-                 << amt << ",transfer,"
-                 << now << "\n";
+            if (risk >= 70) {
+                cout << "[BLOCKED] High risk transaction.\n";
+                pause();
+                return;
+            }
+            else if (risk >= 40) {
+                char choice;
+                cout << "[WARNING] Suspicious transaction. Continue? (y/n): ";
+                cin >> choice;
 
-            file.close();
+                if (choice != 'y' && choice != 'Y') {
+                    cout << "\nTransaction cancelled.\n";
+                    pause();
+                    return;
+                }
+            }
 
-            cout << "\n[SUCCESS] Transfer complete!\n";
+            // 🔥 NOW SAFE TO PROCEED
+            if (!user->withdraw(amt)) {
+                cout << "\n[!] Insufficient balance.\n";
+            } 
+            else {
+                receiver->deposit(amt);
+                save_accounts(accounts);
+
+                // Save transaction
+                time_t now = time(0);
+
+                ofstream file("transactions.csv", ios::app);
+                file << user->get_account_no() << ","
+                     << receiver->get_account_no() << ","
+                     << amt << ",transfer,"
+                     << now << "\n";
+
+                file.close();
+
+                cout << "\n[SUCCESS] Transfer complete!\n";
+            }
         }
     }
 
     pause();
 }
-
 // ---------------- USER MENU ----------------
 void user_menu(Account* user, vector<Account> &accounts) {
     int choice;
