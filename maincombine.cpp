@@ -259,21 +259,35 @@ int calculate_risk(Account* user, int receiver, double amount) {
     if (amount > 0.8 * balance)
         risk += 20;
 
-    // Rule 4: New receiver (check in transaction history)
+    // Rule 4: New receiver check (SAFE parsing)
     ifstream file("transactions.csv");
     string line;
     bool known = false;
 
     while (getline(file, line)) {
+
+        if (line.empty()) continue; // skip empty
+
         stringstream ss(line);
         string s, r;
 
         getline(ss, s, ',');
         getline(ss, r, ',');
 
-        if (!s.empty() && stoi(s) == user->get_account_no() && stoi(r) == receiver) {
-            known = true;
-            break;
+        // skip invalid rows
+        if (s.empty() || r.empty()) continue;
+
+        try {
+            int sender = stoi(s);
+            int recv = stoi(r);
+
+            if (sender == user->get_account_no() && recv == receiver) {
+                known = true;
+                break;
+            }
+        }
+        catch (...) {
+            continue; // skip bad rows instead of crashing
         }
     }
 
