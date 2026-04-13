@@ -276,7 +276,6 @@ int calculate_risk(Account* user, int receiver, double amount) {
 
         // skip invalid rows
         if (s.empty() || r.empty()) continue;
-
         try {
             int sender = stoi(s);
             int recv = stoi(r);
