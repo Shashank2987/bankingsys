@@ -7,6 +7,16 @@
 #include <iomanip>
 
 using namespace std;
+//Hashing Algorithm
+string hash_password(const string &pass) {
+    unsigned long hash = 5381;
+
+    for (char c : pass) {
+        hash = ((hash << 5) + hash) + c; // djb2 algorithm
+    }
+
+    return to_string(hash);
+}
 
 // --- UI UTILS ---
 void clearScreen() {
@@ -140,6 +150,7 @@ void create_account(vector<Account> &accounts) {
 
     cout << "Enter Password    : ";
     cin >> pass;
+    pass = hash_password(pass);
 
     cout << "Initial Deposit $ : ";
     cin >> bal;
@@ -165,7 +176,9 @@ Account* login(vector<Account> &accounts) {
 
     Account* user = find_account(accounts, acc);
 
-    if (user && user->get_password() == pass) {
+    pass = hash_password(pass);
+
+if (user && user->get_password() == pass) {
         return user;
     }
 
