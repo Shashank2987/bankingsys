@@ -254,6 +254,87 @@ void show_transaction_history(Account* user) {
     pause();
 }
 
+void generate_statement(Account* user) {
+    printHeader("BANK STATEMENT");
+
+    ifstream file("transactions.csv");
+
+    if (!file.is_open()) {
+        cout << "[!] No transaction file found.\n";
+        pause();
+        return;
+    }
+
+    string line;
+    double total_credit = 0;
+    double total_debit = 0;
+
+    vector<string> recent;
+
+    while (getline(file, line)) {
+
+        if (line.empty()) continue;
+
+        stringstream ss(line);
+        string sender, receiver, amount, type, timestamp;
+
+        getline(ss, sender, ',');
+        getline(ss, receiver, ',');
+        getline(ss, amount, ',');
+        getline(ss, type, ',');
+        getline(ss, timestamp);
+
+        if (sender.empty() || receiver.empty()) continue;
+
+        try {
+            int s = stoi(sender);
+            int r = stoi(receiver);
+            double amt = stod(amount);
+
+            if (s == user->get_account_no()) {
+                total_debit += amt;
+
+                recent.push_back("[DEBIT]   $" + to_string((int)amt) + " -> " + receiver);
+            }
+            else if (r == user->get_account_no()) {
+                total_credit += amt;
+
+                recent.push_back("[CREDIT]  $" + to_string((int)amt) + " <- " + sender);
+            }
+        }
+        catch (...) {
+            continue;
+        }
+    }
+
+    file.close();
+
+    // 🔹 Display Statement
+    printLine();
+    cout << "Account No : " << user->get_account_no() << endl;
+    cout << "Name       : " << user->get_name() << endl;
+
+    printLine();
+    cout << "Total Credits : $" << fixed << setprecision(2) << total_credit << endl;
+    cout << "Total Debits  : $" << total_debit << endl;
+    cout << "Net Flow      : $" << (total_credit - total_debit) << endl;
+
+    printLine();
+    cout << "Recent Transactions:\n";
+
+    int count = 0;
+    for (int i = recent.size() - 1; i >= 0 && count < 5; i--, count++) {
+        cout << recent[i] << endl;
+    }
+
+    if (recent.empty()) {
+        cout << "No transactions available.\n";
+    }
+
+    printLine();
+    pause();
+}
+
 //-----------------Fraud Detection-----------------
 int calculate_risk(Account* user, int receiver, double amount) {
     int risk = 0;
@@ -394,7 +475,8 @@ void user_menu(Account* user, vector<Account> &accounts) {
         cout << "2. Deposit Money\n";
         cout << "3. Send Money\n";
         cout << "4. Transaction History\n";
-        cout << "5. Logout\n";
+        cout << "5. Generate Bank Statement\n";
+        cout << "6. Logout\n";
 
         cout << "\nChoice: ";
         cin >> choice;
@@ -424,6 +506,9 @@ void user_menu(Account* user, vector<Account> &accounts) {
         }
         else if (choice == 4) {
             show_transaction_history(user);
+        }
+        else if (choice == 5) {
+        generate_statement(user);
         }
 
     } while (choice != 5);
