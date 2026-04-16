@@ -437,7 +437,6 @@ void send_money(Account* user, vector<Account> &accounts) {
                 }
             }
 
-            // 🔥 NOW SAFE TO PROCEED
             if (!user->withdraw(amt)) {
                 cout << "\n[!] Insufficient balance.\n";
             } 
@@ -513,7 +512,6 @@ void user_menu(Account* user, vector<Account> &accounts) {
 
     } while (choice != 5);
 }
-
 // ---------------- MAIN ----------------
 int main() {
     vector<Account> accounts = load_accounts();
