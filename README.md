@@ -1,5 +1,4 @@
 Online Banking Managment System using OOPs Logic, Algorithms 
 [   Accno        |     Password    ]
-    1001               password
-    1002               oil
-    1005               12345
+    100002             password
+    100003              12345
