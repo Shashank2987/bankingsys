@@ -832,7 +832,7 @@ int main() {
     do {
         printHeader("SMART BANKING SYSTEM");
  
-        cout << "1. Open Account (Auto-Assigned Number)\n";
+        cout << "1. Open A New Account\n";
         cout << "2. Login\n";
         cout << "3. Exit\n";
  
