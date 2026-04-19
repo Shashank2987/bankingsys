@@ -7,26 +7,51 @@
 #include <iomanip>
 #include <cmath>
 #include <algorithm>
+#include <cctype>
 
 using namespace std;
 
 // --- CONSTANTS ---
-const string SALT = "Smar7_B@nk_2024_#Secure!"; // Salting string
+const string SALT = "Smar7_B@nk_2024_#Secure!";
+const string ADMIN_USERNAME = "admin";
+const string ADMIN_PASSWORD = "admin123";
 
-// --- Hashing Algorithm with Salting ---
-string hash_password(const string &pass) {
-    // 1st Task: Added Salting
-    string salted_pass = SALT + pass + SALT; 
-    unsigned long hash = 5381;
+// --- UTILITY FUNCTIONS ---
+string to_string_safe(double val) {
+    ostringstream oss;
+    oss << fixed << setprecision(2) << val;
+    return oss.str();
+}
 
-    for (char c : salted_pass) {
-        hash = ((hash << 5) + hash) + c; // djb2 algorithm
+bool is_valid_double(const string& str, double& out) {
+    try {
+        size_t idx = 0;
+        out = stod(str, &idx);
+        return idx == str.length();
+    } catch (...) {
+        return false;
     }
+}
 
+bool is_valid_int(const string& str, int& out) {
+    try {
+        size_t idx = 0;
+        out = stoi(str, &idx);
+        return idx == str.length();
+    } catch (...) {
+        return false;
+    }
+}
+
+string hash_password(const string &pass) {
+    string salted_pass = SALT + pass + SALT;
+    unsigned long hash = 5381;
+    for (char c : salted_pass) {
+        hash = ((hash << 5) + hash) + c;
+    }
     return to_string(hash);
 }
 
-// --- UI UTILS ---
 void clearScreen() {
 #ifdef _WIN32
     system("cls");
@@ -47,12 +72,55 @@ void printHeader(string title) {
 }
 
 void pause() {
-    cout << "\nPress Enter to return...";
-    cin.ignore(10000, '\n'); // Clear any leftover input
+    cout << "\nPress Enter to continue...";
+    cin.ignore(10000, '\n');
     cin.get();
 }
 
-// ============== LOAN STRUCTURE (IMPROVED) ==============
+// ============== ACCOUNT CLASS ==============
+class Account {
+private:
+    int account_no;
+    string name;
+    string plain_password;
+    string password_hash;
+    double balance;
+    bool active;
+
+public:
+    Account() : account_no(0), name(""), plain_password(""), password_hash(""), balance(0), active(true) {}
+    
+    Account(int acc, string n, string p, double b) {
+        account_no = acc;
+        name = n;
+        plain_password = p;
+        password_hash = hash_password(p);
+        balance = b;
+        active = true;
+    }
+
+    int get_account_no() const { return account_no; }
+    string get_name() const { return name; }
+    string get_plain_password() const { return plain_password; }
+    string get_password_hash() const { return password_hash; }
+    double get_balance() const { return balance; }
+    bool is_active() const { return active; }
+    
+    void set_account_no(int acc) { account_no = acc; }
+    void set_name(string n) { name = n; }
+    void set_plain_password(string p) { plain_password = p; }
+    void set_password_hash(string h) { password_hash = h; }
+    void set_balance(double b) { balance = b; }
+    void set_active(bool status) { active = status; }
+    void deposit(double amt) { if (amt > 0) balance += amt; }
+    bool withdraw(double amt) {
+        if (amt > balance || amt <= 0) return false;
+        balance -= amt;
+        return true;
+    }
+};
+
+// ============== LOAN STRUCTURE ==============
 struct Loan {
     int account_no;
     string type;
@@ -66,58 +134,7 @@ struct Loan {
     bool active;
 };
 
-// ============== RECURRING TRANSACTION ==============
-struct Recurring {
-    int from_acc;
-    int to_acc;
-    double amount;
-    int interval_days;
-    time_t last_run;
-};
-
-// ============== ACCOUNT CLASS ==============
-class Account {
-private:
-    int account_no;
-    string name;
-    string password;      // Hashed password for login
-    string plain_password; // Plain text password (for admin viewing)
-    double balance;
-    bool active;
-
-public:
-    Account() : active(true) {}
-    Account(int acc, string n, string p, double b) {
-        account_no = acc;
-        name = n;
-        plain_password = p;           // Store original password
-        password = hash_password(p);  // Hash for login verification
-        balance = b;
-        active = true;
-    }
-
-    int get_account_no() { return account_no; }
-    string get_name() { return name; }
-    string get_password() { return password; }
-    string get_plain_password() { return plain_password; }  // New method
-    double get_balance() { return balance; }
-    bool is_active() { return active; }
-    
-    void set_active(bool status) { active = status; }
-
-    void deposit(double amt) { 
-        if (amt > 0) balance += amt; 
-    }
-    
-    bool withdraw(double amt) {
-        if (amt > balance || amt <= 0) return false;
-        balance -= amt;
-        return true;
-    }
-};
-
-// ============== FILE HANDLING ============
-
+// ============== FILE HANDLING ==============
 vector<Account> load_accounts() {
     vector<Account> accounts;
     ifstream file("accounts.csv");
@@ -134,21 +151,38 @@ vector<Account> load_accounts() {
 
     while (getline(file, line)) {
         if (line.empty()) continue;
-        stringstream ss(line);
-        string acc, name, plain_pass, pass_hash, bal, active;
-
-        getline(ss, acc, ',');
-        getline(ss, name, ',');
-        getline(ss, plain_pass, ',');
-        getline(ss, pass_hash, ',');
-        getline(ss, bal, ',');
-        getline(ss, active, ',');
-
-        if (!acc.empty()) {
-            Account a(stoi(acc), name, plain_pass, stod(bal));
-            if (!active.empty()) a.set_active(stoi(active) == 1);
-            accounts.push_back(a);
+        
+        int commaCount = 0;
+        vector<string> fields;
+        string field;
+        
+        for (size_t i = 0; i < line.length(); i++) {
+            if (line[i] == ',') {
+                fields.push_back(field);
+                field = "";
+            } else {
+                field += line[i];
+            }
         }
+        fields.push_back(field);
+        
+        if (fields.size() < 6) continue;
+
+        int acc_no = 0;
+        double bal = 0;
+        
+        if (!is_valid_int(fields[0], acc_no)) continue;
+        if (!is_valid_double(fields[4], bal)) continue;
+
+        Account a;
+        a.set_account_no(acc_no);
+        a.set_name(fields[1]);
+        a.set_plain_password(fields[2]);
+        a.set_password_hash(fields[3]);
+        a.set_balance(bal);
+        a.set_active(fields[5] == "1");
+        
+        accounts.push_back(a);
     }
 
     file.close();
@@ -162,14 +196,20 @@ void save_accounts(vector<Account> &accounts) {
         file << acc.get_account_no() << ","
              << acc.get_name() << ","
              << acc.get_plain_password() << ","
-             << acc.get_password() << ","
+             << acc.get_password_hash() << ","
              << fixed << setprecision(2) << acc.get_balance() << ","
              << (acc.is_active() ? 1 : 0) << "\n";
     }
     file.close();
 }
 
-// ============== LOAN FILE HANDLING ==============
+void log_transaction(int from, int to, double amt, string type) {
+    ofstream file("transactions.csv", ios::app);
+    time_t now = time(0);
+    file << from << "," << to << "," << fixed << setprecision(2) << amt << "," << type << "," << now << "\n";
+    file.close();
+}
+
 vector<Loan> load_loans() {
     vector<Loan> loans;
     ifstream file("loans.csv");
@@ -181,32 +221,52 @@ vector<Loan> load_loans() {
     }
 
     string line;
-    getline(file, line); // Skip header
+    getline(file, line);
     
     while (getline(file, line)) {
         if (line.empty()) continue;
-        stringstream ss(line);
-        string acc, type, p, ir, d, rem, emi, ad, led, act;
         
-        getline(ss, acc, ','); getline(ss, type, ','); getline(ss, p, ',');
-        getline(ss, ir, ','); getline(ss, d, ','); getline(ss, rem, ',');
-        getline(ss, emi, ','); getline(ss, ad, ','); getline(ss, led, ',');
-        getline(ss, act, ',');
+        vector<string> fields;
+        string field;
         
-        if (!acc.empty()) {
-            Loan l;
-            l.account_no = stoi(acc);
-            l.type = type;
-            l.principal = stod(p);
-            l.interest_rate = stod(ir);
-            l.duration_months = stoi(d);
-            l.remaining_months = stoi(rem);
-            l.monthly_emi = stod(emi);
-            l.applied_date = (time_t)stol(ad);
-            l.last_emi_date = (time_t)stol(led);
-            l.active = stoi(act) == 1;
-            loans.push_back(l);
+        for (size_t i = 0; i < line.length(); i++) {
+            if (line[i] == ',') {
+                fields.push_back(field);
+                field = "";
+            } else {
+                field += line[i];
+            }
         }
+        fields.push_back(field);
+        
+        if (fields.size() < 10) continue;
+
+        Loan l;
+        int acc_no = 0;
+        if (!is_valid_int(fields[0], acc_no)) continue;
+        
+        l.account_no = acc_no;
+        l.type = fields[1];
+        
+        double principal = 0, interest_rate = 0, monthly_emi = 0;
+        int duration = 0, remaining = 0;
+        
+        if (!is_valid_double(fields[2], principal)) continue;
+        if (!is_valid_double(fields[3], interest_rate)) continue;
+        if (!is_valid_int(fields[4], duration)) continue;
+        if (!is_valid_int(fields[5], remaining)) continue;
+        if (!is_valid_double(fields[6], monthly_emi)) continue;
+        
+        l.principal = principal;
+        l.interest_rate = interest_rate;
+        l.duration_months = duration;
+        l.remaining_months = remaining;
+        l.monthly_emi = monthly_emi;
+        l.applied_date = (time_t)stol(fields[7]);
+        l.last_emi_date = (time_t)stol(fields[8]);
+        l.active = (fields[9] == "1");
+        
+        loans.push_back(l);
     }
     file.close();
     return loans;
@@ -224,581 +284,200 @@ void save_loans(vector<Loan> &loans) {
     file.close();
 }
 
-vector<Recurring> load_recurring() {
-    vector<Recurring> list;
-    ifstream file("recurring.csv");
-    if (!file.is_open()) {
-        ofstream newfile("recurring.csv");
-        newfile << "from_acc,to_acc,amount,interval_days,last_run\n";
-        newfile.close();
-        return list;
-    }
-    string line;
-    getline(file, line); // Skip header
-    
-    while (getline(file, line)) {
-        if (line.empty()) continue;
-        stringstream ss(line);
-        string f, t, a, i, lr;
-        getline(ss, f, ','); getline(ss, t, ','); getline(ss, a, ','); 
-        getline(ss, i, ','); getline(ss, lr, ',');
-        if (!f.empty()) 
-            list.push_back({stoi(f), stoi(t), stod(a), stoi(i), (time_t)stol(lr)});
-    }
-    file.close();
-    return list;
-}
-
-void save_all_recurring(vector<Recurring> &list) {
-    ofstream file("recurring.csv");
-    file << "from_acc,to_acc,amount,interval_days,last_run\n";
-    for (auto &r : list) {
-        file << r.from_acc << "," << r.to_acc << "," << fixed << setprecision(2) << r.amount << "," 
-             << r.interval_days << "," << r.last_run << "\n";
-    }
-    file.close();
-}
-
-void log_transaction(int from, int to, double amt, string type, int acc_status = 1) {
-    ofstream file("transactions.csv", ios::app);
-    time_t now = time(0);
-    file << from << "," << to << "," << fixed << setprecision(2) << amt << "," << type << "," << now << "," << acc_status << "\n";
-    file.close();
-}
-
-// ============== ADMIN CONSTANTS ==============
-const string ADMIN_USERNAME = "admin";
-const string ADMIN_PASSWORD = hash_password("admin123"); // Pre-hashed admin password
-
-// ============== ADMIN FUNCTIONS ==============
-Account* admin_login() {
-    printHeader("ADMIN LOGIN");
-    
-    string username, password;
-    
-    cout << "Admin Username : ";
-    cin >> username;
-    cin.ignore(10000, '\n');
-    
-    cout << "Admin Password : ";
-    cin >> password;
-    cin.ignore(10000, '\n');
-    
-    if (username != ADMIN_USERNAME) {
-        cout << "\n[!] Invalid admin username.\n";
-        pause();
-        return nullptr;
-    }
-    
-    if (hash_password(password) != ADMIN_PASSWORD) {
-        cout << "\n[!] Invalid admin password.\n";
-        pause();
-        return nullptr;
-    }
-    
-    cout << "\n[SUCCESS] Admin login successful.\n";
-    pause();
-    return (Account*)1; // Return non-null pointer to indicate admin (not a real account)
-}
-
 // ============== SYSTEM FUNCTIONS ==============
 int generate_unique_account_number(vector<Account> &accounts) {
-    int new_account_no = 100001; // Start from 100001
-    
-    // Find the highest account number in use
+    int new_account_no = 100001;
     for (auto &acc : accounts) {
         if (acc.get_account_no() >= new_account_no) {
             new_account_no = acc.get_account_no() + 1;
         }
     }
-    
     return new_account_no;
 }
 
 Account* find_account(vector<Account> &accounts, int acc_no) {
     for (auto &acc : accounts) {
-        if (acc.get_account_no() == acc_no)
+        if (acc.get_account_no() == acc_no) {
             return &acc;
+        }
     }
     return nullptr;
 }
 
+// ============== ACCOUNT CREATION ==============
 void create_account(vector<Account> &accounts) {
     printHeader("OPEN NEW ACCOUNT");
 
     string name, pass;
-    double bal;
+    double bal = 0;
 
-    // Auto-generate unique account number
     int acc = generate_unique_account_number(accounts);
     
     cout << "Enter Name        : ";
     getline(cin, name);
 
     cout << "Enter Password    : ";
-    cin >> pass;
-    cin.ignore(10000, '\n');
+    getline(cin, pass);
 
     cout << "Initial Deposit Rs : ";
-    cin >> bal;
-    cin.ignore(10000, '\n');
-
-    if (bal < 0) {
-        cout << "\n[!] Invalid amount.\n";
+    string bal_str;
+    getline(cin, bal_str);
+    
+    if (!is_valid_double(bal_str, bal)) {
+        cout << "\n[ERROR] Invalid amount.\n";
         pause();
         return;
     }
 
-    // Account constructor now handles hashing
+    if (bal < 0) {
+        cout << "\n[ERROR] Invalid amount (negative).\n";
+        pause();
+        return;
+    }
+
     accounts.push_back(Account(acc, name, pass, bal));
     save_accounts(accounts);
 
     cout << "\n[SUCCESS] Account created!\n";
-    cout << "[INFO] Your Account Number: " << acc << "\n";
-    cout << "[INFO] Account Name: " << name << "\n";
-    cout << "[INFO] Password: " << pass << "\n";
-    cout << "[INFO] Initial Balance: Rs" << fixed << setprecision(2) << bal << "\n";
+    cout << "[INFO] Your Account Number : " << acc << "\n";
+    cout << "[INFO] Account Name        : " << name << "\n";
+    cout << "[INFO] Password            : " << pass << "\n";
+    cout << "[INFO] Initial Balance     : Rs" << fixed << setprecision(2) << bal << "\n";
     pause();
-}
-
-// ============== EMI PROCESSING ENGINE ==============
-void process_emi_payments(vector<Account> &accounts) {
-    vector<Loan> loans = load_loans();
-    vector<Account> deleted_accounts;
-    bool changed = false;
-    time_t now = time(0);
-
-    for (auto &loan : loans) {
-        if (!loan.active) continue;
-
-        Account* borrower = find_account(accounts, loan.account_no);
-        if (!borrower) continue;
-
-        // Check if 30 days have passed since last EMI
-        double diff_seconds = difftime(now, loan.last_emi_date);
-        double month_seconds = 30 * 86400; // Approximate month in seconds
-
-        if (diff_seconds >= month_seconds) {
-            if (loan.remaining_months > 0) {
-                // Try to deduct EMI
-                if (borrower->withdraw(loan.monthly_emi)) {
-                    loan.remaining_months--;
-                    loan.last_emi_date = now;
-                    changed = true;
-
-                    log_transaction(loan.account_no, 0, loan.monthly_emi, "EMI", 1);
-                    
-                    cout << "[SYSTEM] EMI of Rs" << fixed << setprecision(2) << loan.monthly_emi 
-                         << " deducted from Account " << loan.account_no << "\n";
-
-                    // Check if loan is paid off
-                    if (loan.remaining_months <= 0) {
-                        loan.active = false;
-                        cout << "[INFO] Loan fully paid! Account " << loan.account_no << " loan closed.\n";
-                    }
-                } else {
-                    // INSUFFICIENT FUNDS - ACCOUNT TERMINATED
-                    cout << "\n[CRITICAL] Account " << loan.account_no << " (" << borrower->get_name() 
-                         << ") - Insufficient funds for EMI payment of Rs" << fixed << setprecision(2) 
-                         << loan.monthly_emi << "\n";
-                    cout << "[ACTION] Account has been TERMINATED and DELETED.\n\n";
-
-                    borrower->set_active(false);
-                    loan.active = false;
-                    changed = true;
-
-                    log_transaction(loan.account_no, 0, loan.monthly_emi, "EMI_FAILED_TERMINATED", 0);
-                }
-            }
-        }
-    }
-
-    if (changed) {
-        save_accounts(accounts);
-        save_loans(loans);
-    }
-}
-
-// ============== RECURRING ENGINE ==============
-void process_recurring_logic(Account* user, vector<Account> &accounts) {
-    vector<Recurring> recs = load_recurring();
-    bool changed = false;
-    time_t now = time(0);
-
-    for (auto &r : recs) {
-        if (r.from_acc == user->get_account_no()) {
-            double diff_seconds = difftime(now, r.last_run);
-            double interval_seconds = r.interval_days * 86400;
-
-            if (diff_seconds >= interval_seconds) {
-                Account* receiver = find_account(accounts, r.to_acc);
-                if (receiver && user->withdraw(r.amount)) {
-                    receiver->deposit(r.amount);
-                    r.last_run = now;
-                    changed = true;
-
-                    log_transaction(r.from_acc, r.to_acc, r.amount, "recurring", 1);
-                    
-                    cout << "\n[SYSTEM] Recurring payment of Rs" << fixed << setprecision(2) 
-                         << r.amount << " to Account " << r.to_acc << " processed.\n";
-                } else if (!receiver) {
-                    cout << "\n[WARNING] Recurring payment to Account " << r.to_acc << " failed - recipient not found.\n";
-                } else {
-                    cout << "\n[WARNING] Recurring payment failed - insufficient balance.\n";
-                }
-            }
-        }
-    }
-    if (changed) {
-        save_accounts(accounts);
-        save_all_recurring(recs);
-    }
 }
 
 // ============== LOGIN ==============
 Account* login(vector<Account> &accounts) {
-    printHeader("LOGIN");
+    printHeader("USER LOGIN");
 
-    int acc;
-    string pass;
+    int acc = 0;
+    string acc_str, pass;
 
-    cout << "Account No : ";
-    cin >> acc;
-    cin.ignore(10000, '\n'); // Clear input buffer
+    cout << "Account Number : ";
+    getline(cin, acc_str);
     
-    cout << "Password   : ";
-    getline(cin, pass); // Use getline for password to handle spaces
-    
+    if (!is_valid_int(acc_str, acc)) {
+        cout << "\n[ERROR] Invalid account number.\n";
+        pause();
+        return nullptr;
+    }
+
+    cout << "Password       : ";
+    getline(cin, pass);
+
     Account* user = find_account(accounts, acc);
     if (!user) {
-        cout << "\n[!] Account not found.\n";
+        cout << "\n[ERROR] Account not found.\n";
         pause();
         return nullptr;
     }
 
     if (!user->is_active()) {
-        cout << "\n[!] Account has been terminated.\n";
+        cout << "\n[ERROR] Account has been terminated.\n";
         pause();
         return nullptr;
     }
 
-    if (user->get_password() != hash_password(pass)) {
-        cout << "\n[!] Wrong password.\n";
+    if (user->get_password_hash() != hash_password(pass)) {
+        cout << "\n[ERROR] Wrong password.\n";
         pause();
         return nullptr;
     }
 
     cout << "\n[SUCCESS] Login successful.\n";
     pause();
-
-    // Process EMI and recurring before showing user menu
-    process_emi_payments(accounts);
-    process_recurring_logic(user, accounts);
-
     return user;
 }
 
-void show_transaction_history(Account* user) {
-    printHeader("TRANSACTION HISTORY");
-    
-    ifstream file("transactions.csv");
-    if (!file.is_open()) {
-        cout << "No transactions found.\n";
-        pause();
-        return;
-    }
+// ============== USER MENU ==============
+void user_menu(Account* user, vector<Account> &accounts) {
+    int choice = 0;
 
-    string line;
-    bool found = false;
-    int count = 0;
-
-    while (getline(file, line) && count < 20) {
-        if (line.empty()) continue;
-        stringstream ss(line);
-        string from, to, amt, type, timestamp, status;
-        
-        getline(ss, from, ',');
-        getline(ss, to, ',');
-        getline(ss, amt, ',');
-        getline(ss, type, ',');
-        getline(ss, timestamp, ',');
-        getline(ss, status, ',');
-
-        if (!from.empty() && stoi(from) == user->get_account_no()) {
-            found = true;
-            cout << "[" << type << "] Amount: Rs" << amt 
-                 << " | To: " << to << " | Time: " << timestamp << "\n";
-            count++;
+    do {
+        Account* fresh_user = find_account(accounts, user->get_account_no());
+        if (!fresh_user || !fresh_user->is_active()) {
+            cout << "\n[ERROR] Your account has been terminated!\n";
+            pause();
+            break;
         }
-    }
+        user = fresh_user;
 
-    if (!found) cout << "No transactions found for this account.\n";
-    file.close();
-    pause();
-}
+        printHeader("WELCOME, " + user->get_name());
 
-void generate_statement(Account* user) {
-    printHeader("BANK STATEMENT");
+        cout << "1. Check Balance\n";
+        cout << "2. Deposit Money\n";
+        cout << "3. Logout\n";
 
-    cout << "\nAccount No : " << user->get_account_no() << "\n";
-    cout << "Name       : " << user->get_name() << "\n";
-    cout << "Balance    : Rs" << fixed << setprecision(2) << user->get_balance() << "\n";
-    cout << "Status     : " << (user->is_active() ? "ACTIVE" : "TERMINATED") << "\n";
-
-    cout << "\n--- Recent Transactions ---\n";
-    show_transaction_history(user);
-}
-
-int calculate_risk(Account* user, int receiver, double amount) {
-    int risk = 0;
-    double balance = user->get_balance();
-
-    if (amount > 100000) risk += 30;
-    if (amount > 10000) risk += 40;
-    if ((balance - amount) < 500) risk += 20;
-    if (amount > 0.8 * balance) risk += 20;
-
-    ifstream file("transactions.csv");
-    string line;
-    bool known = false;
-    while (getline(file, line)) {
-        if (line.empty()) continue;
-        stringstream ss(line);
-        string s, r;
-        getline(ss, s, ',');
-        getline(ss, r, ',');
-        if (s.empty() || r.empty()) continue;
-        try {
-            if (stoi(s) == user->get_account_no() && stoi(r) == receiver) {
-                known = true;
-                break;
-            }
-        } catch (...) {
+        cout << "\nChoice: ";
+        string choice_str;
+        getline(cin, choice_str);
+        
+        if (!is_valid_int(choice_str, choice)) {
+            cout << "[ERROR] Invalid input.\n";
+            pause();
             continue;
         }
-    }
-    if (!known) risk += 20;
-    file.close();
-    return risk;
-}
 
-// ============== MONEY TRANSFER ==============
-void send_money(Account* user, vector<Account> &accounts) {
-    printHeader("TRANSFER FUNDS");
-    int to_acc;
-    double amt;
-    
-    cout << "Target Account No : ";
-    cin >> to_acc;
-    cin.ignore(10000, '\n');
-    
-    cout << "Transfer Amount Rs : ";
-    cin >> amt;
-    cin.ignore(10000, '\n');
-
-    if (amt <= 0) {
-        cout << "\n[!] Invalid amount.\n";
-        pause();
-        return;
-    }
-
-    Account* receiver = find_account(accounts, to_acc);
-    if (!receiver) {
-        cout << "\n[!] Receiver not found.\n";
-        pause();
-        return;
-    }
-
-    if (!receiver->is_active()) {
-        cout << "\n[!] Receiver account has been terminated.\n";
-        pause();
-        return;
-    }
-
-    int risk = calculate_risk(user, to_acc, amt);
-    cout << "\n[Risk Analysis]\nRisk Score: " << risk << "%\n";
-    
-    if (risk >= 70) {
-        cout << "[BLOCKED] High risk transaction.\n";
-        pause();
-        return;
-    } else if (risk >= 40) {
-        char choice;
-        cout << "[WARNING] Suspicious transaction. Continue? (y/n): ";
-        cin >> choice;
-        cin.ignore(10000, '\n');
-        if (choice != 'y' && choice != 'Y') {
-            cout << "\nTransaction cancelled.\n";
+        if (choice == 1) {
+            cout << "\nBalance: Rs" << fixed << setprecision(2) << user->get_balance() << "\n";
             pause();
-            return;
         }
-    }
-
-    if (!user->withdraw(amt)) {
-        cout << "\n[!] Insufficient balance.\n";
-    } else {
-        receiver->deposit(amt);
-        save_accounts(accounts);
-        log_transaction(user->get_account_no(), receiver->get_account_no(), amt, "transfer", 1);
-        cout << "\n[SUCCESS] Transfer complete!\n";
-    }
-    pause();
-}
-
-// ============== LOAN SYSTEM ==============
-void loan_menu(Account* user, vector<Account> &accounts) {
-    printHeader("LOAN DEPARTMENT");
-    cout << "1. Home Loan (8% Interest)\n";
-    cout << "2. Car Loan (10% Interest)\n";
-    cout << "3. Gold Loan (12% Interest)\n";
-    cout << "4. Check Loan Status\n";
-    cout << "5. Back\n";
-    
-    int choice;
-    cout << "\nChoice: ";
-    cin >> choice;
-    cin.ignore(10000, '\n');
-    
-    if (choice >= 1 && choice <= 3) {
-        Loan l;
-        l.account_no = user->get_account_no();
-        
-        if (choice == 1) { l.type = "Home"; l.interest_rate = 8.0; }
-        else if (choice == 2) { l.type = "Car"; l.interest_rate = 10.0; }
-        else { l.type = "Gold"; l.interest_rate = 12.0; }
-        
-        cout << "Enter Principal Amount Rs: ";
-        cin >> l.principal;
-        cin.ignore(10000, '\n');
-        
-        cout << "Enter Duration (Months)  : ";
-        cin >> l.duration_months;
-        cin.ignore(10000, '\n');
-        
-        if (l.principal <= 0 || l.duration_months <= 0) {
-            cout << "\n[!] Invalid amount or duration.\n";
-            pause();
-            return;
-        }
-
-        // Eligibility check: balance must be at least 10% of principal
-        if (user->get_balance() < (l.principal * 0.1)) {
-            cout << "\n[REJECTED] Insufficient collateral (Balance must be 10% of Loan).\n";
-            pause();
-            return;
-        }
-
-        // Calculate EMI using standard formula
-        double monthly_rate = l.interest_rate / 100.0 / 12.0;
-        l.monthly_emi = (l.principal * monthly_rate) / 
-                        (1 - pow(1 + monthly_rate, -l.duration_months));
-
-        l.applied_date = time(0);
-        l.last_emi_date = time(0);
-        l.remaining_months = l.duration_months;
-        l.active = true;
-
-        // Save loan details
-        vector<Loan> loans = load_loans();
-        loans.push_back(l);
-        save_loans(loans);
-
-        // Disburse the loan amount to account
-        user->deposit(l.principal);
-        save_accounts(accounts);
-
-        log_transaction(0, l.account_no, l.principal, "loan_disbursed", 1);
-
-        cout << "\n[SUCCESS] Loan approved and Rs" << fixed << setprecision(2)
-             << l.principal << " credited to your account.\n";
-        cout << "[INFO]    Estimated EMI: Rs" << fixed << setprecision(2)
-             << l.monthly_emi << " / month for " << l.duration_months << " months.\n";
-        cout << "[WARNING] EMI will be deducted every 30 days. Ensure sufficient balance!\n";
-    } 
-    else if (choice == 4) {
-        vector<Loan> loans = load_loans();
-        bool found = false;
-        
-        for (auto &l : loans) {
-            if (l.account_no == user->get_account_no()) {
-                found = true;
-                cout << "\n[" << l.type << " Loan]\n";
-                cout << "  Status       : " << (l.active ? "ACTIVE" : "CLOSED") << "\n";
-                cout << "  Principal    : Rs" << fixed << setprecision(2) << l.principal << "\n";
-                cout << "  Interest Rate: " << l.interest_rate << "%\n";
-                cout << "  Monthly EMI  : Rs" << fixed << setprecision(2) << l.monthly_emi << "\n";
-                cout << "  Remaining    : " << l.remaining_months << " months\n";
+        else if (choice == 2) {
+            cout << "Deposit Amount: ";
+            string amt_str;
+            getline(cin, amt_str);
+            
+            double amt = 0;
+            if (!is_valid_double(amt_str, amt)) {
+                cout << "\n[ERROR] Invalid amount.\n";
+                pause();
+                continue;
             }
-        }
-        if (!found) cout << "\nNo active loan applications found.\n";
-    }
-    pause();
-}
-
-// ============== RECURRING MANAGEMENT ==============
-void recurring_menu(Account* user, vector<Account> &accounts) {
-    printHeader("RECURRING PAYMENTS");
-    cout << "1. Schedule New Recurring Payment\n";
-    cout << "2. View My Scheduled Payments\n";
-    cout << "3. Back\n";
-    
-    int choice;
-    cout << "\nChoice: ";
-    cin >> choice;
-    cin.ignore(10000, '\n');
-    
-    if (choice == 1) {
-        Recurring r;
-        r.from_acc = user->get_account_no();
-        
-        cout << "Target Account No: ";
-        cin >> r.to_acc;
-        cin.ignore(10000, '\n');
-        
-        cout << "Amount Rs        : ";
-        cin >> r.amount;
-        cin.ignore(10000, '\n');
-        
-        cout << "Interval (Days)  : ";
-        cin >> r.interval_days;
-        cin.ignore(10000, '\n');
-        
-        if (r.amount <= 0 || r.interval_days <= 0) {
-            cout << "\n[!] Invalid amount or interval.\n";
-            pause();
-            return;
-        }
-
-        if (!find_account(accounts, r.to_acc)) {
-            cout << "\n[!] Target account not found.\n";
-            pause();
-            return;
-        }
-
-        r.last_run = time(0);
-        vector<Recurring> list = load_recurring();
-        list.push_back(r);
-        save_all_recurring(list);
-
-        cout << "\n[SUCCESS] Recurring payment scheduled.\n";
-    } 
-    else if (choice == 2) {
-        vector<Recurring> list = load_recurring();
-        bool found = false;
-        
-        for (auto &r : list) {
-            if (r.from_acc == user->get_account_no()) {
-                found = true;
-                cout << "To Account: " << r.to_acc << " | Amount: Rs" << fixed << setprecision(2) 
-                     << r.amount << " | Every " << r.interval_days << " days\n";
+            
+            if (amt > 0) {
+                user->deposit(amt);
+                save_accounts(accounts);
+                log_transaction(user->get_account_no(), user->get_account_no(), amt, "deposit");
+                cout << "\n[SUCCESS] Deposit done.\n";
+            } else {
+                cout << "\n[ERROR] Invalid amount.\n";
             }
+            pause();
         }
-        if (!found) cout << "No recurring payments found.\n";
-    }
-    pause();
+
+    } while (choice != 3);
 }
 
-// ============== USER MENU ==============
+// ============== ADMIN LOGIN ==============
+bool admin_login() {
+    printHeader("ADMIN LOGIN");
+    
+    string username, password;
+    
+    cout << "Admin Username : ";
+    getline(cin, username);
+    
+    cout << "Admin Password : ";
+    getline(cin, password);
+    
+    if (username != ADMIN_USERNAME) {
+        cout << "\n[ERROR] Invalid admin username.\n";
+        pause();
+        return false;
+    }
+    
+    if (password != ADMIN_PASSWORD) {
+        cout << "\n[ERROR] Invalid admin password.\n";
+        pause();
+        return false;
+    }
+    
+    cout << "\n[SUCCESS] Admin login successful.\n";
+    pause();
+    return true;
+}
+
+// ============== ADMIN FUNCTIONS ==============
 void view_all_users(vector<Account> &accounts) {
     printHeader("ALL REGISTERED USERS");
     
@@ -808,37 +487,44 @@ void view_all_users(vector<Account> &accounts) {
         return;
     }
     
-    cout << "\n" << string(110, '=') << "\n";
-    cout << left << setw(12) << "Account No" << setw(20) << "Name" 
-         << setw(20) << "Password" << setw(20) << "Password Hash"
-         << setw(15) << "Balance (Rs)" << setw(10) << "Status\n";
-    cout << string(110, '=') << "\n";
+    cout << "\n";
+    cout << left << setw(12) << "Account No" 
+         << setw(20) << "Name" 
+         << setw(20) << "Password"
+         << setw(15) << "Balance"
+         << setw(12) << "Status\n";
+    cout << string(79, '=') << "\n";
     
     for (auto &acc : accounts) {
         cout << left << setw(12) << acc.get_account_no() 
              << setw(20) << acc.get_name()
              << setw(20) << acc.get_plain_password()
-             << setw(20) << acc.get_password()
-             << setw(15) << fixed << setprecision(2) << acc.get_balance()
-             << setw(10) << (acc.is_active() ? "ACTIVE" : "TERMINATED")
+             << setw(15) << ("Rs" + to_string_safe(acc.get_balance()))
+             << setw(12) << (acc.is_active() ? "ACTIVE" : "TERMINATED")
              << "\n";
     }
-    cout << string(110, '=') << "\n";
+    cout << string(79, '=') << "\n";
     cout << "\nTotal Users: " << accounts.size() << "\n";
     pause();
 }
 
 void view_user_details(vector<Account> &accounts) {
-    printHeader("VIEW DETAILED USER INFORMATION");
+    printHeader("VIEW USER DETAILS");
     
-    int acc_no;
     cout << "Enter Account Number: ";
-    cin >> acc_no;
-    cin.ignore(10000, '\n');
+    string acc_str;
+    getline(cin, acc_str);
+    
+    int acc_no = 0;
+    if (!is_valid_int(acc_str, acc_no)) {
+        cout << "\n[ERROR] Invalid account number.\n";
+        pause();
+        return;
+    }
     
     Account* user = find_account(accounts, acc_no);
     if (!user) {
-        cout << "\n[!] User not found.\n";
+        cout << "\n[ERROR] User not found.\n";
         pause();
         return;
     }
@@ -849,56 +535,9 @@ void view_user_details(vector<Account> &accounts) {
     cout << "Account Number  : " << user->get_account_no() << "\n";
     cout << "Name            : " << user->get_name() << "\n";
     cout << "Password        : " << user->get_plain_password() << "\n";
-    cout << "Password Hash   : " << user->get_password() << "\n";
+    cout << "Password Hash   : " << user->get_password_hash() << "\n";
     cout << "Current Balance : Rs" << fixed << setprecision(2) << user->get_balance() << "\n";
     cout << "Account Status  : " << (user->is_active() ? "ACTIVE" : "TERMINATED") << "\n";
-    cout << string(60, '=') << "\n";
-    
-    // Display loans
-    vector<Loan> loans = load_loans();
-    bool has_loans = false;
-    for (auto &l : loans) {
-        if (l.account_no == user->get_account_no()) {
-            has_loans = true;
-            cout << "\n[LOAN DETAILS]\n";
-            cout << "Type            : " << l.type << " Loan\n";
-            cout << "Principal       : Rs" << fixed << setprecision(2) << l.principal << "\n";
-            cout << "Interest Rate   : " << l.interest_rate << "%\n";
-            cout << "Monthly EMI     : Rs" << fixed << setprecision(2) << l.monthly_emi << "\n";
-            cout << "Total Duration  : " << l.duration_months << " months\n";
-            cout << "Remaining       : " << l.remaining_months << " months\n";
-            cout << "Loan Status     : " << (l.active ? "ACTIVE" : "CLOSED") << "\n";
-        }
-    }
-    if (!has_loans) {
-        cout << "[LOAN DETAILS]\nNo active loans.\n";
-    }
-    
-    // Display transactions
-    cout << "\n[RECENT TRANSACTIONS]\n";
-    cout << string(60, '-') << "\n";
-    ifstream file("transactions.csv");
-    string line;
-    int count = 0;
-    while (getline(file, line) && count < 10) {
-        if (line.empty()) continue;
-        stringstream ss(line);
-        string from, to, amt, type, timestamp, status;
-        
-        getline(ss, from, ',');
-        getline(ss, to, ',');
-        getline(ss, amt, ',');
-        getline(ss, type, ',');
-        getline(ss, timestamp, ',');
-        getline(ss, status, ',');
-        
-        if (!from.empty() && stoi(from) == user->get_account_no()) {
-            cout << "[" << type << "] Amount: Rs" << amt 
-                 << " | To: " << to << " | Status: " << (stoi(status) ? "SUCCESS" : "FAILED") << "\n";
-            count++;
-        }
-    }
-    file.close();
     cout << string(60, '=') << "\n";
     pause();
 }
@@ -910,9 +549,7 @@ void view_system_statistics(vector<Account> &accounts) {
     int active_accounts = 0;
     int terminated_accounts = 0;
     double total_balance = 0;
-    double total_loans = 0;
-    int total_active_loans = 0;
-    
+
     for (auto &acc : accounts) {
         total_accounts++;
         total_balance += acc.get_balance();
@@ -922,15 +559,7 @@ void view_system_statistics(vector<Account> &accounts) {
             terminated_accounts++;
         }
     }
-    
-    vector<Loan> loans = load_loans();
-    for (auto &l : loans) {
-        if (l.active) {
-            total_loans += l.principal;
-            total_active_loans++;
-        }
-    }
-    
+
     cout << "\n" << string(60, '=') << "\n";
     cout << "[ACCOUNT STATISTICS]\n";
     cout << string(60, '-') << "\n";
@@ -938,23 +567,6 @@ void view_system_statistics(vector<Account> &accounts) {
     cout << "Active Accounts         : " << active_accounts << "\n";
     cout << "Terminated Accounts     : " << terminated_accounts << "\n";
     cout << "Total System Balance    : Rs" << fixed << setprecision(2) << total_balance << "\n";
-    
-    cout << "\n[LOAN STATISTICS]\n";
-    cout << string(60, '-') << "\n";
-    cout << "Total Active Loans      : " << total_active_loans << "\n";
-    cout << "Total Loan Principal    : Rs" << fixed << setprecision(2) << total_loans << "\n";
-    
-    cout << "\n[TRANSACTION STATISTICS]\n";
-    cout << string(60, '-') << "\n";
-    int total_transactions = 0;
-    ifstream file("transactions.csv");
-    string line;
-    getline(file, line); // skip header
-    while (getline(file, line)) {
-        if (!line.empty()) total_transactions++;
-    }
-    file.close();
-    cout << "Total Transactions      : " << total_transactions << "\n";
     cout << string(60, '=') << "\n";
     pause();
 }
@@ -962,36 +574,40 @@ void view_system_statistics(vector<Account> &accounts) {
 void terminate_account_admin(vector<Account> &accounts) {
     printHeader("TERMINATE USER ACCOUNT");
     
-    int acc_no;
     cout << "Enter Account Number to Terminate: ";
-    cin >> acc_no;
-    cin.ignore(10000, '\n');
+    string acc_str;
+    getline(cin, acc_str);
     
+    int acc_no = 0;
+    if (!is_valid_int(acc_str, acc_no)) {
+        cout << "\n[ERROR] Invalid account number.\n";
+        pause();
+        return;
+    }
+
     Account* user = find_account(accounts, acc_no);
     if (!user) {
-        cout << "\n[!] User not found.\n";
+        cout << "\n[ERROR] User not found.\n";
         pause();
         return;
     }
-    
+
     if (!user->is_active()) {
-        cout << "\n[!] Account is already terminated.\n";
+        cout << "\n[ERROR] Account is already terminated.\n";
         pause();
         return;
     }
-    
-    cout << "\n[WARNING] You are about to terminate account: " << user->get_name() << " (" << acc_no << ")\n";
+
+    cout << "\n[WARNING] Terminate account: " << user->get_name() << " (" << acc_no << ")\n";
     cout << "This action cannot be undone.\n";
-    
-    char confirm;
-    cout << "Are you sure? (y/n): ";
-    cin >> confirm;
-    cin.ignore(10000, '\n');
-    
-    if (confirm == 'y' || confirm == 'Y') {
+    cout << "Are you sure? (yes/no): ";
+    string confirm;
+    getline(cin, confirm);
+
+    if (confirm == "yes" || confirm == "YES") {
         user->set_active(false);
         save_accounts(accounts);
-        log_transaction(acc_no, 0, 0, "admin_termination", 0);
+        log_transaction(acc_no, 0, 0, "admin_termination");
         cout << "\n[SUCCESS] Account terminated.\n";
     } else {
         cout << "\nTermination cancelled.\n";
@@ -999,64 +615,27 @@ void terminate_account_admin(vector<Account> &accounts) {
     pause();
 }
 
-void view_all_transactions() {
-    printHeader("ALL SYSTEM TRANSACTIONS");
-    
-    ifstream file("transactions.csv");
-    if (!file.is_open()) {
-        cout << "No transactions found.\n";
-        pause();
-        return;
-    }
-    
-    string line;
-    getline(file, line); // skip header
-    
-    cout << "\n" << string(120, '=') << "\n";
-    cout << left << setw(12) << "From Acc" << setw(12) << "To Acc" 
-         << setw(15) << "Amount (Rs)" << setw(20) << "Type" 
-         << setw(15) << "Status" << setw(20) << "Timestamp\n";
-    cout << string(120, '=') << "\n";
-    
-    while (getline(file, line)) {
-        if (line.empty()) continue;
-        stringstream ss(line);
-        string from, to, amt, type, timestamp, status;
-        
-        getline(ss, from, ',');
-        getline(ss, to, ',');
-        getline(ss, amt, ',');
-        getline(ss, type, ',');
-        getline(ss, timestamp, ',');
-        getline(ss, status, ',');
-        
-        cout << left << setw(12) << from << setw(12) << to
-             << setw(15) << amt << setw(20) << type
-             << setw(15) << (stoi(status) ? "SUCCESS" : "FAILED")
-             << setw(20) << timestamp << "\n";
-    }
-    file.close();
-    cout << string(120, '=') << "\n";
-    pause();
-}
-
 void admin_menu(vector<Account> &accounts) {
-    int choice;
+    int choice = 0;
     
     do {
         printHeader("ADMIN DASHBOARD");
         
         cout << "1. View All Users\n";
-        cout << "2. View Specific User Details\n";
+        cout << "2. View User Details\n";
         cout << "3. View System Statistics\n";
-        cout << "4. View All Transactions\n";
-        cout << "5. Terminate User Account\n";
-        cout << "6. Change Admin Password\n";
-        cout << "7. Logout\n";
+        cout << "4. Terminate Account\n";
+        cout << "5. Logout\n";
         
         cout << "\nChoice: ";
-        cin >> choice;
-        cin.ignore(10000, '\n');
+        string choice_str;
+        getline(cin, choice_str);
+        
+        if (!is_valid_int(choice_str, choice)) {
+            cout << "[ERROR] Invalid input.\n";
+            pause();
+            continue;
+        }
         
         if (choice == 1) {
             view_all_users(accounts);
@@ -1068,102 +647,34 @@ void admin_menu(vector<Account> &accounts) {
             view_system_statistics(accounts);
         }
         else if (choice == 4) {
-            view_all_transactions();
-        }
-        else if (choice == 5) {
             terminate_account_admin(accounts);
         }
-        else if (choice == 6) {
-            cout << "\n[INFO] Change admin password feature coming soon.\n";
-            pause();
-        }
         
-    } while (choice != 7);
-}
-
-void user_menu(Account* user, vector<Account> &accounts) {
-    int choice;
-
-    do {
-        // Reload account to get fresh data
-        Account* fresh_user = find_account(accounts, user->get_account_no());
-        if (!fresh_user || !fresh_user->is_active()) {
-            cout << "\n[ERROR] Your account has been terminated!\n";
-            pause();
-            break;
-        }
-        user = fresh_user;
-
-        string title = "WELCOME, " + user->get_name();
-        printHeader(title);
-
-        cout << "1. Check Balance\n";
-        cout << "2. Deposit Money\n";
-        cout << "3. Send Money\n";
-        cout << "4. Loans (Home/Car/Gold)\n";
-        cout << "5. Recurring Transactions\n";
-        cout << "6. Transaction History\n";
-        cout << "7. Generate Bank Statement\n";
-        cout << "8. Logout\n";
-
-        cout << "\nChoice: ";
-        cin >> choice;
-        cin.ignore(10000, '\n');
-
-        if (choice == 1) {
-            cout << "\nBalance: Rs" << fixed << setprecision(2) << user->get_balance() << endl;
-            pause();
-        }
-        else if (choice == 2) {
-            double amt;
-            cout << "Deposit Amount: ";
-            cin >> amt;
-            cin.ignore(10000, '\n');
-            if (amt > 0) {
-                user->deposit(amt);
-                save_accounts(accounts);
-                log_transaction(user->get_account_no(), user->get_account_no(), amt, "deposit", 1);
-                cout << "\n[SUCCESS] Deposit done.\n";
-            } else {
-                cout << "\n[!] Invalid amount.\n";
-            }
-            pause();
-        }
-        else if (choice == 3) {
-            send_money(user, accounts);
-        }
-        else if (choice == 4) {
-            loan_menu(user, accounts);
-        }
-        else if (choice == 5) {
-            recurring_menu(user, accounts);
-        }
-        else if (choice == 6) {
-            show_transaction_history(user);
-        }
-        else if (choice == 7) {
-            generate_statement(user);
-        }
-
-    } while (choice != 8);
+    } while (choice != 5);
 }
 
 // ============== MAIN ==============
 int main() {
     vector<Account> accounts = load_accounts();
-    int choice;
+    int choice = 0;
 
     do {
         printHeader("SMART BANKING SYSTEM");
 
-        cout << "1. Open Account (Auto-Assigned Number)\n";
+        cout << "1. Open Account\n";
         cout << "2. User Login\n";
         cout << "3. Admin Login\n";
         cout << "4. Exit\n";
 
         cout << "\nChoice: ";
-        cin >> choice;
-        cin.ignore(10000, '\n');
+        string choice_str;
+        getline(cin, choice_str);
+        
+        if (!is_valid_int(choice_str, choice)) {
+            cout << "[ERROR] Invalid input.\n";
+            pause();
+            continue;
+        }
 
         if (choice == 1) {
             create_account(accounts);
@@ -1173,8 +684,9 @@ int main() {
             if (user) user_menu(user, accounts);
         }
         else if (choice == 3) {
-            Account* admin = admin_login();
-            if (admin) admin_menu(accounts);
+            if (admin_login()) {
+                admin_menu(accounts);
+            }
         }
 
     } while (choice != 4);
