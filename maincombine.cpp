@@ -8,9 +8,7 @@
 #include <cmath>
 #include <algorithm>
 #include <cctype>
-
 using namespace std;
-
 // Constants
 const string SALT = "Smar7_B@nk_2024_#Secure!";
 const string ADMIN_USERNAME = "admin";
