@@ -1507,12 +1507,108 @@ void admin_menu(vector<Account> &accounts) {
         
     } while (choice != 8);
 }
+void process_loans(vector<Account>& accounts) {
+    vector<Loan> loans = load_loans();
+    time_t now = time(0);
+
+    for (auto &loan : loans) {
+        if (!loan.active) continue;
+
+        Account* user = find_account(accounts, loan.account_no);
+        if (!user || !user->is_active()) continue;
+
+        double monthly_seconds = 30 * 24 * 60 * 60;
+
+        // how many EMIs missed
+        int missed = (now - loan.last_payment_date) / monthly_seconds;
+
+        while (missed > 0 && loan.remaining_months > 0) {
+
+            if (user->withdraw(loan.monthly_emi)) {
+                loan.remaining_months--;
+                loan.last_payment_date += monthly_seconds;
+
+                log_transaction(user->get_account_no(), 0,
+                    loan.monthly_emi, "EMI_PAYMENT", "Loan EMI");
+
+            } else {
+                // ❗ your rule
+                user->set_active(false);
+
+                log_transaction(user->get_account_no(), 0, 0,
+                    "LOAN_DEFAULT", "Account terminated due to EMI failure");
+
+                loan.active = false;
+                break;
+            }
+
+            missed--;
+        }
+
+        if (loan.remaining_months == 0) {
+            loan.active = false;
+        }
+    }
+
+    save_loans(loans);
+    save_accounts(accounts);
+}
+void process_recurring(vector<Account>& accounts) {
+    vector<RecurringPayment> payments = load_recurring();
+    time_t now = time(0);
+
+    for (auto &p : payments) {
+        if (!p.active) continue;
+
+        Account* sender = find_account(accounts, p.from_account);
+        Account* receiver = find_account(accounts, p.to_account);
+
+        if (!sender || !receiver) continue;
+
+        double interval_seconds = p.interval_days * 24 * 60 * 60;
+
+        int missed = (now - p.last_payment) / interval_seconds;
+
+        while (missed > 0) {
+
+            if (sender->withdraw(p.amount)) {
+                receiver->deposit(p.amount);
+
+                log_transaction(sender->get_account_no(),
+                                receiver->get_account_no(),
+                                p.amount,
+                                "RECURRING_PAYMENT",
+                                "Auto transfer");
+
+                p.last_payment += interval_seconds;
+
+            } else {
+                // optional: deactivate
+                p.active = false;
+
+                log_transaction(sender->get_account_no(),
+                                receiver->get_account_no(),
+                                0,
+                                "RECURRING_FAILED",
+                                "Insufficient balance");
+
+                break;
+            }
+
+            missed--;
+        }
+    }
+
+    save_recurring(payments);
+    save_accounts(accounts);
+}
 
 // Main Function
 int main() {
     vector<Account> accounts = load_accounts();
     int choice = 0;
-
+    process_loans(accounts);
+    process_recurring(accounts);
     do {
         printBanner();
         cout << "\n";
