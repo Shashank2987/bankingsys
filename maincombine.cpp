@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <cctype>
 using namespace std;
-const string SALT = "Smar7_B@nk_2024_#Secure!";
+const string SALT = "SDFPRJ_B@nk$pherE_2026_#Secure";
 const string ADMIN_USERNAME = "admin";
 const string ADMIN_PASSWORD = "admin123";
 
@@ -135,6 +135,7 @@ string get_card_type(const string& cardNum) {
 void printBanner() {
     clearScreen();
     cout << string(80, '=') << "\n";
+    cout << "              BankSphere\n";
     cout << "              SMART BANKING SYSTEM \n";
     cout << string(80, '=') << "\n\n";
 }
