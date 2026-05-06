@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <cctype>
 using namespace std;
-const string SALT = "SDFPRJ_B@nk$pherE_2026_#Secure";
+const string SALT = "*D@&*#EH@OIG@O*#&";
 const string ADMIN_USERNAME = "admin";
 const string ADMIN_PASSWORD = "admin123";
 
